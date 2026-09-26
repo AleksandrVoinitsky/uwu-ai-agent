@@ -160,3 +160,36 @@ async def resume_graph(
         config=_thread_config(chat_id),
     )
     return result
+
+
+async def stream_message(
+    graph: CompiledStateGraph,
+    *,
+    chat_id: int,
+    text: str,
+    channel: str = "site",
+    customer_id: int | None = None,
+):
+    """Потоково выдаёт текст итогового ответа (SSE) по мере генерации.
+
+    Стримит только сообщения роли ``ai`` с непустым содержимым (пропуская ввод
+    пользователя, tool-calls и результаты инструментов).
+    """
+    input_data = {
+        "messages": [HumanMessage(content=text)],
+        "chat_id": chat_id,
+        "channel": channel,
+        "customer_id": customer_id,
+    }
+    async for chunk, _meta in graph.astream(
+        input_data,
+        config=_thread_config(chat_id),
+        stream_mode="messages",
+    ):
+        if getattr(chunk, "type", None) != "ai":
+            continue
+        if getattr(chunk, "tool_calls", None):
+            continue
+        content = getattr(chunk, "content", "") or ""
+        if content:
+            yield str(content)

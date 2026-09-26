@@ -14,9 +14,9 @@ API ядра UWU**, а не частью учётного процесса: он
 
 ## Статус
 
-Фаза 5 — **HITL**: tool-calling (`classify_intent → decide_action ⇄ call_tool`)
-+ write-инструменты с одобрением оператора (`request_approval` + interrupt/resume,
-эндпоинт `/resume`). План и статус фаз — в [`ROADMAP.md`](ROADMAP.md).
+Фазы 2–7 реализованы: tool-calling, HITL-одобрение write-действий, SSE-стриминг,
+аудит запусков и eval/безопасность. Персонализация + RAG (фаза 4) — контракт
+готов, ждёт ядро + pgvector. Статус — в [`ROADMAP.md`](ROADMAP.md).
 
 ## Что делает агент (целевое состояние)
 

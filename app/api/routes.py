@@ -11,11 +11,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app import __version__
 from app.core.logging import get_logger
-from app.service import process_message, resume_graph
+from app.service import process_message, resume_graph, stream_message
 
 router = APIRouter()
 logger = get_logger("app.api")
@@ -136,3 +137,20 @@ async def run_debug(payload: RunRequest, request: Request) -> dict:
         "context": result.get("context"),
         "answer": result.get("final_answer"),
     }
+
+
+@router.post("/stream")
+async def stream(payload: RunRequest, request: Request) -> StreamingResponse:
+    """Потоковый ответ (SSE) — выдаёт текст ответа по мере генерации."""
+
+    async def event_stream():
+        async for token in stream_message(
+            request.app.state.graph,
+            chat_id=payload.chat_id,
+            text=payload.message,
+            channel=payload.channel,
+        ):
+            yield f"data: {token}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
