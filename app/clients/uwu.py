@@ -98,6 +98,28 @@ class UwuClient:
         """Статус/состав заявки покупателя (tool)."""
         return await self._get_json("/api/agent/get_zakaz", params={"order_id": order_id})
 
+    # --- Tool-friendly запись (выполняется после одобрения оператора) ---
+
+    async def add_to_cart(
+        self, customer_id: int, nomenklatura_id: int, quantity: float
+    ) -> dict:
+        """Добавить товар в корзину покупателя (после одобрения)."""
+        return await self._post_json(
+            "/api/agent/add_to_cart",
+            {
+                "customer_id": customer_id,
+                "nomenklatura_id": nomenklatura_id,
+                "quantity": quantity,
+            },
+        )
+
+    async def create_order(self, customer_id: int, items: list) -> dict:
+        """Создать заказ (DRAFT) от имени покупателя (после одобрения)."""
+        return await self._post_json(
+            "/api/agent/create_order",
+            {"customer_id": customer_id, "items": items},
+        )
+
     # --- Одобрения (human-in-the-loop) ---
 
     async def create_approval(self, **payload: Any) -> dict:

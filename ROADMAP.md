@@ -16,7 +16,7 @@
 | 2. Консультация | `classify_intent` + `retrieve_context` + `generate`, чтение каталога/остатков | ✅ | 0, 1 | этот репозиторий |
 | 3. Промпты/инструменты из админки | кэш промптов/инструментов, регистрация в LLM (tool-calling) | ✅ | 0, 1 | этот репозиторий |
 | 4. Персонализация | профиль, история, список покупок, RAG-поиск (pgvector) | ⏳ | 2 | этот репозиторий |
-| 5. HITL-действия | корзина/заказ с одобрением, `AgentApproval`, interrupt/resume | ⏳ | 3 | этот репозиторий |
+| 5. HITL-действия | корзина/заказ с одобрением, `AgentApproval`, interrupt/resume | ✅ | 3 | этот репозиторий |
 | 6. Стриминг и наблюдение | SSE, `agent_runs`, LangSmith/Langfuse | 🔄 (аудит `agent_runs` ✅, SSE ⏳) | 2 | этот репозиторий |
 | 7. Eval и безопасность | золотой датасет, adversarial-тесты, rate limit | ⏳ | 2–6 | этот репозиторий |
 
@@ -69,13 +69,21 @@
   LLM с привязанными инструментами сам выбирает и вызывает их (`ToolNode`).
 - Кэш промптов/инструментов из ядра (`app/config_loader/`) с fallback.
 
-### Фазы 4–7 — следующий шаг (этот репозиторий)
+### Фаза 5 — HITL ✅ (реализовано)
+
+- Write-инструменты `add_to_cart`/`create_order` (регистрируются в LLM, но не
+  исполняются напрямую).
+- Узел `request_approval`: создаёт `AgentApproval` (`POST /api/agent/approvals`)
+  и прерывает граф (`interrupt`); после решения оператора — выполняет write
+  (`/api/agent/add_to_cart`, `/api/agent/create_order`) или формирует отказ.
+- Оркестратор распознаёт прерывание (`approval_pending`) и `resume_graph` +
+  эндпоинт `/resume` для возобновления.
+
+### Фазы 4, 6, 7 — следующий шаг
 
 1. **Фаза 4**: персонализация + RAG (pgvector) — история/рекомендации к заказу.
-2. **Фаза 5**: HITL — `request_approval`/`resume_after_approval`, interrupt,
-   checkpointer PostgreSQL (схема `agent`), write-инструменты.
-3. **Фаза 6**: SSE-стриминг ответа, запись `agent_runs`.
-4. **Фаза 7**: eval-набор, adversarial-тесты, rate limiting.
+2. **Фаза 6**: SSE-стриминг ответа (аудит `agent_runs` уже ✅).
+3. **Фаза 7**: eval-набор, adversarial-тесты, rate limiting.
 
 ## Точки согласования с автором (🧩)
 

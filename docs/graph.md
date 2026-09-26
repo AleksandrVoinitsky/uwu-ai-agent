@@ -34,27 +34,22 @@
 | --- | --- | --- |
 | `classify_intent` | LLM-классификация намерения (промпт `classify_intent`) | эвристика по ключевым словам |
 | `decide_action` | LLM с привязанными инструментами: ответ или `tool_calls` | детерминированный ответ (поиск/список) |
-| `call_tool` | `ToolNode` — исполнение выбранных инструментов | — |
+| `call_tool` | `ToolNode` — исполнение read-инструментов | — |
+| `request_approval` | HITL: создаёт `AgentApproval`, `interrupt`; после решения — write/отказ | — |
 | `finalize` | извлечение `final_answer` из последнего сообщения | — |
 
-## Рёбра (текущее, фаза 3)
+## Рёбра (текущее, фаза 5)
 
 ```
 START → classify_intent → decide_action
-                             ├─ tool_calls → call_tool → decide_action (цикл)
+                             ├─ read-tool → call_tool → decide_action (цикл)
+                             ├─ write-tool → request_approval (interrupt) → decide_action
                              └─ ответ ────→ finalize → END
 ```
 
-Целевой граф (фазы 5):
-
-```
-START → classify_intent
-  ├─ consultation/read ─→ decide_action ⇄ call_tool → finalize → END
-  └─ write_action (add_to_cart/create_order)
-        → request_approval (interrupt)
-        → [одобрено] → call_tool → END
-        → [отклонено] → finalize (объяснение) → END
-```
+Write-действие (`add_to_cart`/`create_order`) прерывает граф: создаётся
+`AgentApproval`, оператор решает в ядре, агент возобновляет граф (`/resume`) —
+при одобрении выполняет запись, при отказе формирует объяснение.
 
 ## Инструменты (фаза 3 — tool-calling)
 

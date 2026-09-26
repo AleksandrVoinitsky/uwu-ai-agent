@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import BaseTool
@@ -14,6 +15,9 @@ from langchain_core.tools import BaseTool
 from app.config_loader.loader import PromptSpec
 from app.core.config import Settings
 from app.tools.uwu_tools import ToolFn
+
+if TYPE_CHECKING:
+    from app.clients.uwu import UwuClient
 
 
 @dataclass
@@ -26,6 +30,10 @@ class AgentRuntime:
     settings: Settings
     # LangChain-инструменты для tool-calling (регистрируются в LLM).
     lc_tools: list[BaseTool] = field(default_factory=list)
+    # Имена инструментов, требующих одобрения (add_to_cart, create_order).
+    write_tool_names: frozenset[str] = field(default_factory=frozenset)
+    # Клиент ядра — для создания одобрений и выполнения write-инструментов.
+    client: UwuClient | None = None
 
 
 def render_prompt(template: str, **values: object) -> str:

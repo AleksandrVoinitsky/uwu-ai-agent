@@ -36,3 +36,28 @@ class FakeToolCallingLLM:
     async def ainvoke(self, messages):
         self.calls.append(messages)
         return self.responses.pop(0) if self.responses else AIMessage(content="нет ответа")
+
+
+class MockUwuClient:
+    """Заглушка клиента ядра: фиксирует одобрения, write-вызовы и запуски."""
+
+    def __init__(self):
+        self.approvals: list[dict] = []
+        self.added: list[tuple] = []
+        self.orders: list[tuple] = []
+        self.runs: list[dict] = []
+
+    async def create_approval(self, **payload):
+        self.approvals.append(payload)
+        return {"id": 1, "status": "pending"}
+
+    async def add_to_cart(self, customer_id, nomenklatura_id, quantity):
+        self.added.append((customer_id, nomenklatura_id, quantity))
+        return {"ok": True}
+
+    async def create_order(self, customer_id, items):
+        self.orders.append((customer_id, items))
+        return {"ok": True}
+
+    async def post_run(self, **payload):
+        self.runs.append(payload)

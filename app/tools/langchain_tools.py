@@ -31,6 +31,17 @@ class GetZakazArgs(BaseModel):
     order_id: int = Field(description="ID заявки/заказа покупателя")
 
 
+class AddToCartArgs(BaseModel):
+    customer_id: int = Field(description="ID покупателя")
+    nomenklatura_id: int = Field(description="ID товара (номенклатуры)")
+    quantity: float = Field(description="Количество")
+
+
+class CreateOrderArgs(BaseModel):
+    customer_id: int = Field(description="ID покупателя")
+    items: list[dict] = Field(description="Позиции заказа: [{nomenklatura_id, quantity}]")
+
+
 def build_langchain_tools(
     client: UwuClient, tool_specs: dict[str, ToolSpec]
 ) -> list[BaseTool]:
@@ -75,6 +86,39 @@ def build_langchain_tools(
                 name="get_order_status",
                 description=tool_specs["get_order_status"].description,
                 args_schema=GetZakazArgs,
+            )
+        )
+
+    return tools
+
+
+def build_write_tools(
+    client: UwuClient, tool_specs: dict[str, ToolSpec]
+) -> list[BaseTool]:
+    """Write-инструменты (add_to_cart/create_order) — требуют одобрения оператора.
+
+    Эти инструменты регистрируются в LLM (чтобы он мог их предложить), но НЕ
+    выполняются напрямую: граф маршрутизирует их вызов в узел ``request_approval``
+    (создание ``AgentApproval`` + interrupt). Исполнение происходит после одобрения.
+    """
+    tools: list[BaseTool] = []
+
+    if "add_to_cart" in tool_specs:
+        tools.append(
+            StructuredTool.from_function(
+                coroutine=client.add_to_cart,
+                name="add_to_cart",
+                description=tool_specs["add_to_cart"].description,
+                args_schema=AddToCartArgs,
+            )
+        )
+    if "create_order" in tool_specs:
+        tools.append(
+            StructuredTool.from_function(
+                coroutine=client.create_order,
+                name="create_order",
+                description=tool_specs["create_order"].description,
+                args_schema=CreateOrderArgs,
             )
         )
 

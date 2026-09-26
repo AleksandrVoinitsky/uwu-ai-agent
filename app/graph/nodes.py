@@ -13,10 +13,12 @@ START → classify_intent → decide_action ⇄ call_tool → finalize → END
 """
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langgraph.types import interrupt
 
 from app.graph.runtime import AgentRuntime, render_prompt
 from app.graph.state import AgentState
@@ -207,3 +209,67 @@ def make_finalize(runtime: AgentRuntime) -> Callable:
         return {"final_answer": content or _FALLBACK_ANSWER}
 
     return finalize
+
+
+async def _execute_write(runtime: AgentRuntime, tool_key: str, payload: dict) -> dict:
+    """Выполняет write-инструмент после одобрения (через REST API ядра)."""
+    if runtime.client is None:
+        return {"error": "клиент ядра недоступен"}
+    try:
+        if tool_key == "add_to_cart":
+            return await runtime.client.add_to_cart(
+                int(payload["customer_id"]),
+                int(payload["nomenklatura_id"]),
+                float(payload["quantity"]),
+            )
+        if tool_key == "create_order":
+            return await runtime.client.create_order(
+                int(payload["customer_id"]), payload["items"]
+            )
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)}
+    return {"error": f"неизвестный инструмент: {tool_key}"}
+
+
+def make_request_approval(runtime: AgentRuntime) -> Callable:
+    """Узел HITL: создаёт ``AgentApproval`` и прерывает граф до решения оператора.
+
+    Возвращает из ``interrupt()`` значение-запрос (approval_id/tool_key/payload);
+    при возобновлении ``interrupt()`` вернёт решение ``{"approved": bool}`` —
+    тогда узел выполняет write (одобрено) или возвращает объяснение отказа.
+    """
+
+    async def request_approval(state: AgentState) -> dict:
+        messages = state.get("messages") or []
+        last = messages[-1]
+        tool_calls = getattr(last, "tool_calls", None) or []
+        tool_call = tool_calls[0]
+        tool_key = tool_call["name"]
+        payload = tool_call.get("args") or {}
+
+        approval_id = None
+        if runtime.client is not None:
+            try:
+                resp = await runtime.client.create_approval(
+                    tool_key=tool_key,
+                    payload=payload,
+                    chat_id=state.get("chat_id"),
+                    customer_id=state.get("customer_id"),
+                )
+                approval_id = resp.get("id")
+            except Exception:  # noqa: BLE001
+                approval_id = None
+
+        decision = interrupt(
+            {"approval_id": approval_id, "tool_key": tool_key, "payload": payload}
+        )
+        approved = decision.get("approved") if isinstance(decision, dict) else bool(decision)
+
+        if approved:
+            result = await _execute_write(runtime, tool_key, payload)
+            content = "[система] Действие выполнено: " + json.dumps(result, ensure_ascii=False)
+        else:
+            content = "[система] Действие отклонено оператором."
+        return {"messages": [AIMessage(content=content)]}
+
+    return request_approval
