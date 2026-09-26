@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # --- LLM (OpenAI-совместимый API) ---
     llm_base_url: str | None = None
     llm_api_key: str = ""
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "gpt-4.1"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 1024
 

@@ -22,13 +22,19 @@ Docker-сети.
 | `UWU_API_BASE_URL` | `http://localhost:8000` | базовый URL ядра UWU |
 | `UWU_API_KEY` | — | API-ключ агента |
 | `UWU_API_TIMEOUT_SECONDS` | `30.0` | таймаут запросов к ядру |
-| `LLM_BASE_URL` | — | OpenAI-совместимый base URL (пусто = по умолчанию) |
+| `LLM_BASE_URL` | `https://inference.waw0.amvera.ru/v1` | OpenAI-совместимый base URL |
 | `LLM_API_KEY` | — | ключ LLM |
-| `LLM_MODEL` | `gpt-4o-mini` | имя модели |
+| `LLM_MODEL` | `gpt-4.1` | имя модели |
 | `LLM_TEMPERATURE` | `0.3` | температура |
 | `LLM_MAX_TOKENS` | `1024` | лимит токенов |
 | `CHECKPOINT_DB_URL` | — | PostgreSQL для checkpointer (пусто = in-memory) |
 | `CHECKPOINT_SCHEMA` | `agent` | схема checkpointer |
+
+> **LLM-провайдер.** По умолчанию настроен [Amvera LLM Inference](https://docs.amvera.ru/LLM/)
+> (OpenAI-совместимый API). Токен копируется в ЛК Amvera в разделе LLM (модель →
+> «токен доступа»); модели: `gpt-4.1`, `gpt-5`, `gpt-5.5`, `glm-5.1`, `qwen3_235b`,
+> `deepseek-V4`, `llama70b` и др. Любой другой OpenAI-совместимый бэкенд задаётся
+> тем же `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`.
 
 ## Запуск
 

@@ -8,7 +8,7 @@ def test_defaults():
     s = Settings(_env_file=None)
     assert s.environment == "production"
     assert s.agent_port == 8100
-    assert s.llm_model == "gpt-4o-mini"
+    assert s.llm_model == "gpt-4.1"
     assert s.llm_temperature == 0.3
     assert s.checkpoint_db_url is None
     assert s.checkpoint_schema == "agent"
