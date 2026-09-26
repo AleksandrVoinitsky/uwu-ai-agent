@@ -1,0 +1,18 @@
+# --- uwu-ai-agent core runtime ---
+fastapi==0.141.1
+uvicorn[standard]==0.54.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+httpx==0.28.1
+# --- LangGraph / LLM ---
+langgraph==1.2.12
+langchain-core==1.6.5
+langchain-openai==1.6.6
+# --- Checkpointer (PostgreSQL, схема agent; фаза 2+) ---
+langgraph-checkpoint-postgres==3.1.2
+psycopg[binary]==3.3.6
+# --- dev / test ---
+pytest==9.1.1
+pytest-asyncio==1.4.0
+ruff==0.16.9
+mypy==2.3.1

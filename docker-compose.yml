@@ -1,0 +1,23 @@
+services:
+  agent:
+    build: .
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      AGENT_PORT: "8100"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Ядро UWU (REST API). В продакшене — имя сервиса ядра в общей сети.
+      UWU_API_BASE_URL: ${UWU_API_BASE_URL:-http://localhost:8000}
+      UWU_API_KEY: ${UWU_API_KEY:-}
+      UWU_API_TIMEOUT_SECONDS: ${UWU_API_TIMEOUT_SECONDS:-30.0}
+      # LLM (OpenAI-совместимый API).
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.3}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1024}
+      # Checkpointer LangGraph (пусто = in-memory; PostgreSQL — фаза 2+).
+      CHECKPOINT_DB_URL: ${CHECKPOINT_DB_URL:-}
+      CHECKPOINT_SCHEMA: ${CHECKPOINT_SCHEMA:-agent}
+    ports:
+      - "8100:8100"
+    restart: unless-stopped
