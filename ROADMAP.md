@@ -11,7 +11,7 @@
 
 | Фаза | Содержание | Статус | Зависимости | Где делается |
 | --- | --- | --- | --- | --- |
-| 0. Ядро | миграции `agent_*`, API-key auth, эндпоинты §9, права агента | 🔄 частично | — | **ядро UWU** |
+| 0. Ядро | миграции `agent_*`, API-key auth, эндпоинты §9, права агента | ✅ | — | **ядро UWU** |
 | 1. Каркас агента | репозиторий, FastAPI control-plane, LangGraph-граф-заглушка, healthz | ✅ | 0 | этот репозиторий |
 | 2. Консультация | `classify_intent` + `retrieve_context` + `generate`, чтение каталога/остатков | ⏳ | 0, 1 | этот репозиторий |
 | 3. Промпты/инструменты из админки | кэш промптов/инструментов, регистрация в LLM | ⏳ | 0, 1 | этот репозиторий |
@@ -22,23 +22,22 @@
 
 ## Детали фаз
 
-### Фаза 0 — Ядро UWU (вне этого репозитория)
+### Фаза 0 — Ядро UWU (вне этого репозитория) — ✅ готово
 
-Уже реализовано в ядре (плоскость управления): модели `app/models/agent.py`,
-сервис `app/services/agent_service.py`, админка `app/web/agent_admin.py`,
-миграция, `verify_key()` для API-аутентификации.
+Реализовано в ядре UWU:
+- Плоскость управления: модели `app/models/agent.py`, сервис
+  `app/services/agent_service.py`, админка `app/web/agent_admin.py`, миграция.
+- **API-key аутентификация**: зависимость `get_current_agent` (`app/core/deps.py`).
+- **Эндпоинты, потребляемые агентом**: `app/api/agent.py` — `/api/agent/{inbox,
+  messages, context, prompts, tools, approvals, runs}`.
+- **Tool-friendly чтение**: `search_catalog`, `get_stock`, `get_cart`, `get_zakaz`.
+- **Поля обмена**: `Message.author`/`agent_run_id`, `Chat.agent_enabled`
+  (миграция `a1b2c3d4e5f9`).
 
-Осталось в ядре (🧩 зависимость для фаз 2–7):
-1. Зависимость API-key аутентификации (рядом с `get_current_user`).
-2. Эндпоинты, потребляемые агентом: `/api/agent/inbox`, `/api/agent/messages`,
-   `/api/agent/context/{chat_id}`, `/api/agent/prompts`, `/api/agent/tools`,
-   `/api/agent/approvals`, `/api/agent/runs`.
-3. Tool-friendly эндпоинты чтения: `/api/agent/search_catalog`,
-   `/api/agent/get_stock`, `/api/agent/get_cart`, `/api/agent/get_zakaz`.
-4. Роль/принципал агента с урезанными правами.
+Роль/принципал агента с урезанными правами представлен правами API-ключа
+(`AGENT_PERMISSIONS`, выдаются по умолчанию при создании ключа в админке).
 
-Контракт этих эндпоинтов зафиксирован в `docs/integration.md` и в клиенте
-`app/clients/uwu.py` — по нему пишутся контракт-тесты.
+Контракт зафиксирован в `docs/integration.md` и клиенте `app/clients/uwu.py`.
 
 ### Фаза 1 — Каркас агента (✅ текущий коммит)
 

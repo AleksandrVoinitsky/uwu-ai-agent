@@ -13,26 +13,32 @@ SHA-256, показывается один раз). Агент передаёт 
 Authorization: Bearer <UWU_API_KEY>
 ```
 
-> 🧩 Формат авторизации подлежит подтверждению при реализации зависимости
-> API-key в ядре (см. `ROADMAP.md`, фаза 0). Ключ и базовый URL задаются через
-> `UWU_API_BASE_URL` / `UWU_API_KEY`.
+> ✅ Реализовано в ядре: зависимость `get_current_agent` (в
+> `app/core/deps.py`) принимает `Authorization: Bearer <key>` (или `X-Api-Key`).
+> Ключ и базовый URL задаются через `UWU_API_BASE_URL` / `UWU_API_KEY`.
 
 ## Эндпоинты, потребляемые агентом
 
 | Эндпоинт | Метод | Назначение | Статус в ядре |
 | --- | --- | --- | --- |
-| `/api/agent/inbox` | GET | непрочитанные входящие (polling) | 🧩 этап |
-| `/api/agent/messages` | POST | агент публикует ответ (`author="agent"`) | 🧩 этап |
-| `/api/agent/context/{chat_id}` | GET | сводка профиль/корзина/история | 🧩 этап |
-| `/api/agent/prompts` | GET | активные промпты (кэш агента) | 🧩 этап |
-| `/api/agent/tools` | GET | включённые инструменты | 🧩 этап |
-| `/api/agent/approvals` | POST | создать запрос одобрения | 🧩 этап |
-| `/api/agent/approvals/{id}/decide` | POST | решение оператора | 🧩 этап |
-| `/api/agent/runs` | POST | записать результат запуска (аудит) | 🧩 этап |
+| `/api/agent/inbox` | GET | непрочитанные входящие (polling) | ✅ |
+| `/api/agent/messages` | POST | агент публикует ответ (`author="agent"`) | ✅ |
+| `/api/agent/context/{chat_id}` | GET | сводка профиль/корзина/история | ✅ |
+| `/api/agent/prompts` | GET | активные промпты (кэш агента) | ✅ |
+| `/api/agent/tools` | GET | включённые инструменты | ✅ |
+| `/api/agent/approvals` | POST | создать запрос одобрения | ✅ |
+| `/api/agent/approvals/{id}` | GET | статус одобрения (агент опрашивает для resume) | ✅ |
+| `/api/agent/runs` | POST | записать результат запуска (аудит) | ✅ |
+
+Решение по одобрению выполняет оператор в админке ядра
+(`/admin/agent/approvals/{id}/decide`, cookie-авторизация); агент узнаёт о
+решении опросом `GET /api/agent/approvals/{id}` — это исключает самоодобрение
+агентом собственных действий.
 
 Tool-friendly эндпоинты чтения (для инструментов): `/api/agent/search_catalog`,
-`/api/agent/get_stock`, `/api/agent/get_cart`, `/api/agent/get_zakaz` (только
-чтение; запись — через существующие `documents`/`customer` API с одобрением).
+`/api/agent/get_stock`, `/api/agent/get_cart`, `/api/agent/get_zakaz` — ✅
+реализованы (только чтение; запись — через существующие `documents`/`customer`
+API с одобрением).
 
 ## Поток сообщения
 
