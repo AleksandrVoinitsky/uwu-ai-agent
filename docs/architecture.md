@@ -54,9 +54,13 @@ control-plane.
 | [`app/core/config.py`](../app/core/config.py) | Настройки (env/.env): ядро, LLM, checkpointer |
 | [`app/core/logging.py`](../app/core/logging.py) | Единый формат логов |
 | [`app/clients/uwu.py`](../app/clients/uwu.py) | Клиент REST API ядра (`/api/agent/*`) |
+| [`app/config_loader/`](../app/config_loader/loader.py) | Промпты/инструменты из ядра + fallback |
+| [`app/tools/uwu_tools.py`](../app/tools/uwu_tools.py) | Инструменты-обёртки над ядром |
 | [`app/llm/factory.py`](../app/llm/factory.py) | Создание `ChatOpenAI` из настроек |
+| [`app/graph/runtime.py`](../app/graph/runtime.py) | Рантайм-зависимости графа (`AgentRuntime`) |
 | [`app/graph/state.py`](../app/graph/state.py) | Состояние графа `AgentState` |
-| [`app/graph/nodes.py`](../app/graph/nodes.py) | Узлы графа (фаза 1 — заглушки) |
+| [`app/graph/nodes.py`](../app/graph/nodes.py) | Узлы графа (classify/retrieve/generate) |
 | [`app/graph/builder.py`](../app/graph/builder.py) | Сборка графа |
-| [`app/api/routes.py`](../app/api/routes.py) | Маршруты control-plane |
+| [`app/service.py`](../app/service.py) | Оркестратор: сборка рантайма, обработка сообщений |
+| [`app/api/routes.py`](../app/api/routes.py) | Маршруты control-plane (`/webhook`, `/run`) |
 | [`app/main.py`](../app/main.py) | Фабрика приложения, lifespan |

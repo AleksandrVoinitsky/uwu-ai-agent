@@ -80,6 +80,24 @@ class UwuClient:
         """Сводка контекста: профиль/корзина/история покупателя."""
         return await self._get_json(f"/api/agent/context/{chat_id}")
 
+    # --- Tool-friendly чтение (обёртки над эндпоинтами ядра) ---
+
+    async def search_catalog(self, query: str) -> list[dict]:
+        """Поиск товаров по названию/артикулу (tool)."""
+        return await self._get_json("/api/agent/search_catalog", params={"query": query})
+
+    async def get_stock(self, nomenklatura_id: int) -> dict:
+        """Остаток товара: учётный и доступный (tool)."""
+        return await self._get_json("/api/agent/get_stock", params={"nomenklatura_id": nomenklatura_id})
+
+    async def get_cart(self, customer_id: int) -> dict:
+        """Корзина покупателя (tool)."""
+        return await self._get_json("/api/agent/get_cart", params={"customer_id": customer_id})
+
+    async def get_zakaz(self, order_id: int) -> dict:
+        """Статус/состав заявки покупателя (tool)."""
+        return await self._get_json("/api/agent/get_zakaz", params={"order_id": order_id})
+
     # --- Одобрения (human-in-the-loop) ---
 
     async def create_approval(self, **payload: Any) -> dict:
@@ -107,8 +125,8 @@ class UwuClient:
 
     # --- Низкоуровневые помощники ---
 
-    async def _get_json(self, path: str) -> Any:
-        resp = await self._client.get(path)
+    async def _get_json(self, path: str, params: dict | None = None) -> Any:
+        resp = await self._client.get(path, params=params)
         resp.raise_for_status()
         return resp.json()
 

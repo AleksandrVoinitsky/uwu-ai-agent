@@ -17,11 +17,3 @@ async def test_root(client):
     resp = await client.get("/")
     assert resp.status_code == 200
     assert resp.json()["service"] == "uwu-ai-agent"
-
-
-async def test_webhook_stub(client):
-    resp = await client.post("/webhook", json={"chat_id": 42, "text": "привет"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "accepted"
-    assert data["chat_id"] == 42

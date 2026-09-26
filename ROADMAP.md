@@ -13,7 +13,7 @@
 | --- | --- | --- | --- | --- |
 | 0. Ядро | миграции `agent_*`, API-key auth, эндпоинты §9, права агента | ✅ | — | **ядро UWU** |
 | 1. Каркас агента | репозиторий, FastAPI control-plane, LangGraph-граф-заглушка, healthz | ✅ | 0 | этот репозиторий |
-| 2. Консультация | `classify_intent` + `retrieve_context` + `generate`, чтение каталога/остатков | ⏳ | 0, 1 | этот репозиторий |
+| 2. Консультация | `classify_intent` + `retrieve_context` + `generate`, чтение каталога/остатков | ✅ | 0, 1 | этот репозиторий |
 | 3. Промпты/инструменты из админки | кэш промптов/инструментов, регистрация в LLM | ⏳ | 0, 1 | этот репозиторий |
 | 4. Персонализация | профиль, история, список покупок, RAG-поиск (pgvector) | ⏳ | 2 | этот репозиторий |
 | 5. HITL-действия | корзина/заказ с одобрением, `AgentApproval`, interrupt/resume | ⏳ | 3 | этот репозиторий |
@@ -51,19 +51,25 @@
 - Тесты: `tests/` (healthz, config, graph, client, factory).
 - Документация: `README.md`, `AGENTS.md`, `ROADMAP.md`, `docs/*`.
 
-### Фазы 2–7 — следующий шаг (этот репозиторий)
+### Фаза 2 — Консультация ✅ (реализовано)
 
-Порядок работ (от общего к частному):
-1. **Фаза 2**: реальные узлы `classify_intent`/`generate` (LLM из `app/llm/`),
-   `retrieve_context` через `UwuClient`, ветвление по намерению в `builder.py`.
-2. **Фаза 3**: кэш промптов/инструментов (`UwuClient.get_prompts/get_tools`),
-   регистрация инструментов в LLM (tool-calling).
-3. **Фаза 4**: персонализация + RAG (pgvector) — после реализации
-   tool-friendly эндпоинтов в ядре.
-4. **Фаза 5**: HITL — `request_approval`/`resume_after_approval`, interrupt,
-   checkpointer PostgreSQL (схема `agent`).
-5. **Фаза 6**: SSE-стриминг ответа, запись `agent_runs`.
-6. **Фаза 7**: eval-набор, adversarial-тесты, rate limiting.
+- Реальные узлы `classify_intent`/`retrieve_context`/`generate` (`app/graph/nodes.py`)
+  с LLM (Amvera, `app/llm/`) и детерминированным fallback без LLM.
+- Инструменты-обёртки над ядром (`app/tools/uwu_tools.py`): `search_catalog`,
+  `get_stock`, `get_cart`, `get_order_status`.
+- Конфиг-лоадер промптов/инструментов из ядра с fallback (`app/config_loader/`).
+- Обработка сообщений через `/webhook` + отладочный `/run` (`app/service.py`,
+  `app/api/routes.py`).
+
+### Фазы 3–7 — следующий шаг (этот репозиторий)
+
+1. **Фаза 3**: регистрация инструментов в LLM (tool-calling), чтобы LLM сам
+   выбирал и вызывал инструменты (сейчас выбор детерминирован по намерению).
+2. **Фаза 4**: персонализация + RAG (pgvector) — история/рекомендации к заказу.
+3. **Фаза 5**: HITL — `request_approval`/`resume_after_approval`, interrupt,
+   checkpointer PostgreSQL (схема `agent`), write-инструменты.
+4. **Фаза 6**: SSE-стриминг ответа, запись `agent_runs`.
+5. **Фаза 7**: eval-набор, adversarial-тесты, rate limiting.
 
 ## Точки согласования с автором (🧩)
 

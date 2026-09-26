@@ -14,9 +14,10 @@ API ядра UWU**, а не частью учётного процесса: он
 
 ## Статус
 
-Фаза 1 — **каркас**: репозиторий, FastAPI control-plane (`/healthz`, `/webhook`),
-LangGraph-граф-заглушка, клиент ядра, тесты, документация. План и статус фаз —
-в [`ROADMAP.md`](ROADMAP.md).
+Фаза 2 — **консультация**: реальный граф LangGraph (`classify_intent →
+retrieve_context → generate`) с LLM (Amvera), инструменты-обёртки над ядром,
+обработка сообщений через `/webhook`. План и статус фаз — в
+[`ROADMAP.md`](ROADMAP.md).
 
 ## Что делает агент (целевое состояние)
 

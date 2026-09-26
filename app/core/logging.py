@@ -19,3 +19,8 @@ def configure_logging(level: str = "INFO") -> None:
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(level.upper())
+
+
+def get_logger(name: str) -> logging.Logger:
+    """Возвращает логгер по имени (как в ядре UWU)."""
+    return logging.getLogger(name)

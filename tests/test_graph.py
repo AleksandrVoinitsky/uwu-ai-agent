@@ -1,31 +1,66 @@
-"""Тесты графа LangGraph (фаза 1 — каркас)."""
+"""Тесты графа LangGraph (фаза 2 — консультация)."""
 from __future__ import annotations
 
 from langchain_core.messages import HumanMessage
 
 from app.graph.builder import build_graph
+from tests.conftest import make_runtime
+from tests.fakes import FakeLLM
 
-# checkpointer привязан к «нити» диалога (thread_id = беседа в ядре UWU).
 _CFG = {"configurable": {"thread_id": "chat-1"}}
 
 
-def test_graph_runs_stub():
-    graph = build_graph()
-    result = graph.invoke({"messages": [HumanMessage(content="Привет")]}, config=_CFG)
-    assert result["intent"] == "fallback"
-    assert result["final_answer"]
+async def _invoke(runtime, text: str) -> dict:
+    graph = build_graph(runtime)
+    return await graph.ainvoke(
+        {"messages": [HumanMessage(content=text)], "chat_id": 1, "channel": "site"},
+        config=_CFG,
+    )
 
 
-def test_graph_preserves_messages():
-    graph = build_graph()
-    result = graph.invoke({"messages": [HumanMessage(content="первое")]}, config=_CFG)
-    # reducer add_messages сохраняет историю диалога в состоянии.
-    assert len(result["messages"]) == 1
-    assert result["messages"][0].content == "первое"
+async def test_classify_via_llm():
+    runtime = make_runtime(llm=FakeLLM(["stock"]))
+    result = await _invoke(runtime, "есть в наличии?")
+    assert result["intent"] == "stock"
 
 
-def test_graph_node_functions_are_pure():
-    from app.graph.nodes import classify_intent, generate
+async def test_classify_heuristic_without_llm():
+    result = await _invoke(make_runtime(), "какой статус у заказа?")
+    assert result["intent"] == "order_status"
 
-    assert classify_intent({}) == {"intent": "fallback"}
-    assert generate({})["final_answer"]
+
+async def test_retrieve_context_calls_search():
+    calls: list[str] = []
+
+    async def search(query: str):
+        calls.append(query)
+        return [{"name": "Ручка", "price": "100.00", "stock": "5"}]
+
+    result = await _invoke(make_runtime(tools={"search_catalog": search}), "ручка")
+    assert calls == ["ручка"]
+    assert result["context"]["products"][0]["name"] == "Ручка"
+
+
+async def test_generate_with_llm():
+    llm = FakeLLM(["stock", "Да, 5 штук в наличии."])
+    result = await _invoke(make_runtime(llm=llm), "есть в наличии ручка?")
+    assert result["intent"] == "stock"
+    assert result["final_answer"] == "Да, 5 штук в наличии."
+
+
+async def test_write_intent_requires_approval():
+    result = await _invoke(make_runtime(), "добавь ручку в корзину")
+    assert result["intent"] == "add_to_cart"
+    assert result["context"]["requires_approval"] is True
+
+
+async def test_preserves_history():
+    graph = build_graph(make_runtime())
+    await graph.ainvoke(
+        {"messages": [HumanMessage(content="первое")], "chat_id": 1}, config=_CFG
+    )
+    result = await graph.ainvoke(
+        {"messages": [HumanMessage(content="второе")], "chat_id": 1}, config=_CFG
+    )
+    # reducer add_messages сохраняет историю в рамках одной нити (thread_id).
+    assert len(result["messages"]) == 2

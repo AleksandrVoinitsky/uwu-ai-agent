@@ -10,6 +10,7 @@ UWU. Отдельный сервис и контейнер, клиент REST AP
 | [architecture](architecture.md) | Архитектура, стек, карта модулей |
 | [graph](graph.md) | Граф LangGraph: состояние, узлы, рёбра |
 | [integration](integration.md) | Интеграция с ядром UWU: эндпоинты, API-ключ, поток, HITL |
+| [CORE_CONTRACT](CORE_CONTRACT.md) | Контракт для разработчика ядра UWU (что реализовать) |
 | [testing](testing.md) | Автотесты (TDD), слои, запуск |
 | [deployment](deployment.md) | Сборка Docker, развёртывание, переменные окружения |
 
