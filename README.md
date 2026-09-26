@@ -14,9 +14,9 @@ API ядра UWU**, а не частью учётного процесса: он
 
 ## Статус
 
-Фаза 2 — **консультация**: реальный граф LangGraph (`classify_intent →
-retrieve_context → generate`) с LLM (Amvera), инструменты-обёртки над ядром,
-обработка сообщений через `/webhook`. План и статус фаз — в
+Фаза 3 — **tool-calling**: граф LangGraph `classify_intent → decide_action ⇄
+call_tool → finalize`, где LLM (Amvera) сам выбирает и вызывает read-инструменты;
+промпты/инструменты загружаются из ядра. План и статус фаз — в
 [`ROADMAP.md`](ROADMAP.md).
 
 ## Что делает агент (целевое состояние)

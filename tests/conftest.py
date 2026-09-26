@@ -14,11 +14,17 @@ from app.graph.runtime import AgentRuntime
 from app.main import create_app
 
 
-def make_runtime(llm=None, tools=None) -> AgentRuntime:
+def make_runtime(llm=None, tools=None, lc_tools=None) -> AgentRuntime:
     """Собирает рантайм на дефолтной конфигурации с подменяемыми LLM/инструментами."""
     settings = Settings(_env_file=None)
     config = default_config(settings)
-    return AgentRuntime(llm=llm, prompts=config.prompts, tools=tools or {}, settings=settings)
+    return AgentRuntime(
+        llm=llm,
+        prompts=config.prompts,
+        tools=tools or {},
+        lc_tools=lc_tools or [],
+        settings=settings,
+    )
 
 
 @pytest.fixture

@@ -6,9 +6,10 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.tools import BaseTool
 
 from app.config_loader.loader import PromptSpec
 from app.core.config import Settings
@@ -23,6 +24,8 @@ class AgentRuntime:
     prompts: dict[str, PromptSpec]
     tools: dict[str, ToolFn]
     settings: Settings
+    # LangChain-инструменты для tool-calling (регистрируются в LLM).
+    lc_tools: list[BaseTool] = field(default_factory=list)
 
 
 def render_prompt(template: str, **values: object) -> str:

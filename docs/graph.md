@@ -7,7 +7,7 @@
 ## Состояние (`AgentState`)
 
 См. [`app/graph/state.py`](../app/graph/state.py). Единая схема для всех
-запусков; поля фаз 3+ объявлены заранее.
+запусков; поля фаз 4+ объявлены заранее.
 
 | Поле | Тип | Назначение |
 | --- | --- | --- |
@@ -24,51 +24,51 @@
 
 ## Рантайм (`AgentRuntime`)
 
-Узлы — фабрики, замыкающие [`AgentRuntime`](../app/graph/runtime.py) (LLM,
-промпты, инструменты, настройки). Это позволяет тестировать узлы изолированно
-(мок LLM/инструментов) и переиспользовать один граф с разными провайдерами.
+Узлы — фабрики, замыкающие [`AgentRuntime`](../app/graph/runtime.py): LLM,
+промпты, инструменты (обычные + LangChain для tool-calling), настройки. Это
+позволяет тестировать узлы изолированно (мок LLM/инструментов).
 
-## Узлы (фаза 2 — реализовано)
+## Узлы (фаза 3 — реализовано)
 
 | Узел | Ответственность | Fallback без LLM |
 | --- | --- | --- |
 | `classify_intent` | LLM-классификация намерения (промпт `classify_intent`) | эвристика по ключевым словам |
-| `retrieve_context` | вызов read-инструментов по намерению (поиск/остатки/заказ) | инструменты не вызываются |
-| `generate` | генерация ответа (промпт `generate`/`reorder_suggestion`) | детерминированный список товаров |
+| `decide_action` | LLM с привязанными инструментами: ответ или `tool_calls` | детерминированный ответ (поиск/список) |
+| `call_tool` | `ToolNode` — исполнение выбранных инструментов | — |
+| `finalize` | извлечение `final_answer` из последнего сообщения | — |
 
-`classify_intent` → `retrieve_context` → `generate` (см.
-[`app/graph/nodes.py`](../app/graph/nodes.py)).
-
-## Рёбра (текущее, фаза 2)
+## Рёбра (текущее, фаза 3)
 
 ```
-START → classify_intent → retrieve_context → generate → END
+START → classify_intent → decide_action
+                             ├─ tool_calls → call_tool → decide_action (цикл)
+                             └─ ответ ────→ finalize → END
 ```
 
-Целевой граф (фазы 3–5):
+Целевой граф (фазы 5):
 
 ```
 START → classify_intent
-  ├─ consultation ──────→ retrieve_context → personalize → generate → END
-  ├─ read_tool (stock/price/status) → call_tool → generate → END
+  ├─ consultation/read ─→ decide_action ⇄ call_tool → finalize → END
   └─ write_action (add_to_cart/create_order)
         → request_approval (interrupt)
-        → [одобрено] → call_tool → generate → END
-        → [отклонено] → generate (объяснение) → END
+        → [одобрено] → call_tool → END
+        → [отклонено] → finalize (объяснение) → END
 ```
 
-## Инструменты (фаза 2 — read)
+## Инструменты (фаза 3 — tool-calling)
 
-| Инструмент | Эндпоинт ядра | Намерение |
+| Инструмент | Эндпоинт ядра | Право |
 | --- | --- | --- |
-| `search_catalog` | `GET /api/agent/search_catalog` | consultation/stock/price/reorder |
-| `get_stock` | `GET /api/agent/get_stock` | stock |
-| `get_cart` | `GET /api/agent/get_cart` | cart |
-| `get_order_status` | `GET /api/agent/get_zakaz` | order_status |
+| `search_catalog` | `GET /api/agent/search_catalog` | `catalog.read` |
+| `get_stock` | `GET /api/agent/get_stock` | `catalog.read` |
+| `get_cart` | `GET /api/agent/get_cart` | `catalog.read` |
+| `get_order_status` | `GET /api/agent/get_zakaz` | `documents.read` |
 
-Инструменты — тонкие обёртки над REST API ядра ([`app/tools/uwu_tools.py`](../app/tools/uwu_tools.py)).
-Выбор инструмента сейчас детерминирован по намерению; фаза 3 — tool-calling
-(LLM сам выбирает инструмент и аргументы).
+Инструменты — `StructuredTool` с типизированной схемой аргументов
+([`app/tools/langchain_tools.py`](../app/tools/langchain_tools.py)); имена/описания
+берутся из реестра ядра. LLM сам выбирает инструмент и аргументы (tool-calling).
+Write-инструменты (`add_to_cart`/`create_order`) подключаются на фазе HITL (5).
 
 ## Сборка и персистентность
 

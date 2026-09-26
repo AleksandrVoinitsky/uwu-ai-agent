@@ -17,6 +17,7 @@ from app.config_loader.loader import load_agent_config
 from app.core.config import Settings
 from app.graph.runtime import AgentRuntime
 from app.llm.factory import build_chat_model
+from app.tools.langchain_tools import build_langchain_tools
 from app.tools.uwu_tools import build_tools
 
 
@@ -33,10 +34,12 @@ async def build_runtime(settings: Settings) -> tuple[AgentRuntime, UwuClient]:
     config = await load_agent_config(client, settings)
     llm = build_chat_model(settings)
     tools = build_tools(client)
+    lc_tools = build_langchain_tools(client, config.tools)
     runtime = AgentRuntime(
         llm=llm,
         prompts=config.prompts,
         tools=tools,
+        lc_tools=lc_tools,
         settings=settings,
     )
     return runtime, client

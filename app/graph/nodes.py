@@ -1,18 +1,22 @@
-"""Узлы графа LangGraph (фаза 2 — консультация).
+"""Узлы графа LangGraph (фаза 3 — tool-calling).
 
-Узлы — фабрики, замыкающие :class:`~app.graph.runtime.AgentRuntime` (LLM,
-промпты, инструменты). Каждый узел — асинхронная функция от ``AgentState``,
-возвращающая частичное обновление состояния. LLM-вызовы имеют детерминированный
-fallback (эвристика/заглушка), поэтому граф работает и без сконфигурированного LLM.
+Узлы — фабрики, замыкающие :class:`~app.graph.runtime.AgentRuntime`. Маршрут:
 
-Маршрут: ``classify_intent → retrieve_context → generate`` (см. builder).
+```
+START → classify_intent → decide_action ⇄ call_tool → finalize → END
+```
+
+``decide_action`` — LLM с привязанными read-инструментами: либо отвечает, либо
+возвращает tool_calls; ``call_tool`` (``ToolNode``) исполняет их, результат
+возвращается в ``decide_action``. Без LLM ``decide_action`` деградирует к
+детерминированному ответу (поиск по каталогу/список товаров).
 """
 from __future__ import annotations
 
 import re
 from collections.abc import Callable
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 
 from app.graph.runtime import AgentRuntime, render_prompt
 from app.graph.state import AgentState
@@ -64,15 +68,6 @@ def _extract_order_id(text: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def _role(message) -> str:
-    return getattr(message, "type", "unknown")
-
-
-def _format_history(state: AgentState) -> str:
-    messages = state.get("messages") or []
-    return "\n".join(f"{_role(m)}: {m.content}" for m in messages[-10:])
-
-
 def _format_context(context: dict) -> str:
     parts: list[str] = []
     products = context.get("products")
@@ -107,7 +102,6 @@ def _fallback_answer(context: dict) -> str:
 
 
 async def _safe_tool(runtime: AgentRuntime, tool_key: str, **kwargs):
-    """Вызывает инструмент, не роняя граф при ошибке/отсутствии инструмента."""
     fn = runtime.tools.get(tool_key)
     if fn is None:
         return None
@@ -115,6 +109,44 @@ async def _safe_tool(runtime: AgentRuntime, tool_key: str, **kwargs):
         return await fn(**kwargs)
     except Exception:  # noqa: BLE001 — инструмент не должен валить граф
         return None
+
+
+async def _deterministic_context(runtime: AgentRuntime, state: AgentState, intent: str) -> dict:
+    """Детерминированное извлечение контекста (без LLM)."""
+    text = _last_user_text(state)
+    context: dict = {"intent": intent}
+    if intent in ("consultation", "stock", "price", "reorder_suggestion"):
+        context["products"] = await _safe_tool(runtime, "search_catalog", query=text) or []
+    elif intent == "order_status":
+        order_id = _extract_order_id(text)
+        context["order"] = (
+            await _safe_tool(runtime, "get_order_status", order_id=order_id)
+            if order_id
+            else None
+        )
+    elif intent in ("add_to_cart", "create_order"):
+        context["requires_approval"] = True
+    return context
+
+
+def _system_prompt(runtime: AgentRuntime, intent: str) -> str:
+    """Собирает системную инструкцию: роль + правила + инструкция генерации."""
+    system = runtime.prompts.get("system")
+    generate = runtime.prompts.get("generate")
+    parts: list[str] = []
+    if system is not None and system.template:
+        parts.append(system.template)
+    if generate is not None and generate.template:
+        parts.append(
+            render_prompt(
+                generate.template,
+                intent=intent,
+                history="",
+                context="(собери нужные данные через доступные инструменты)",
+                reorder="",
+            )
+        )
+    return "\n\n".join(parts)
 
 
 # --- Узлы ----------------------------------------------------------------------
@@ -128,8 +160,8 @@ def make_classify_intent(runtime: AgentRuntime) -> Callable:
             return {"intent": _heuristic_intent(text)}
         rendered = render_prompt(prompt.template, messages=text)
         try:
-            resp = await runtime.llm.ainvoke([HumanMessage(content=rendered)])
-            raw = str(resp.content or "").strip().lower()
+            resp = await runtime.llm.ainvoke([BaseMessage(content=rendered, type="human")])
+            raw = str(getattr(resp, "content", "") or "").strip().lower()
         except Exception:  # noqa: BLE001
             return {"intent": _heuristic_intent(text)}
         for intent in INTENTS:
@@ -140,71 +172,38 @@ def make_classify_intent(runtime: AgentRuntime) -> Callable:
     return classify_intent
 
 
-def make_retrieve_context(runtime: AgentRuntime) -> Callable:
-    async def retrieve_context(state: AgentState) -> dict:
+def make_decide_action(runtime: AgentRuntime) -> Callable:
+    async def decide_action(state: AgentState) -> dict:
         intent = state.get("intent") or "fallback"
-        text = _last_user_text(state)
-        context: dict = {"intent": intent}
 
-        if intent in ("consultation", "stock", "price", "reorder_suggestion"):
-            context["products"] = (
-                await _safe_tool(runtime, "search_catalog", query=text) or []
-            )
-        elif intent == "order_status":
-            order_id = _extract_order_id(text)
-            context["order"] = (
-                await _safe_tool(runtime, "get_order_status", order_id=order_id)
-                if order_id
-                else None
-            )
-        elif intent in ("add_to_cart", "create_order"):
-            # Запись — только через одобрение оператора (фаза 5).
-            context["requires_approval"] = True
-
-        return {"context": context}
-
-    return retrieve_context
-
-
-def make_generate(runtime: AgentRuntime) -> Callable:
-    async def generate(state: AgentState) -> dict:
-        intent = state.get("intent") or "fallback"
-        context = state.get("context") or {}
-
+        # Без LLM — детерминированный ответ (без tool-calling).
         if runtime.llm is None:
-            return {"final_answer": _fallback_answer(context)}
+            context = await _deterministic_context(runtime, state, intent)
+            return {"context": context, "messages": [AIMessage(content=_fallback_answer(context))]}
 
-        if context.get("requires_approval"):
-            return {
-                "final_answer": (
-                    "Это действие требует подтверждения оператора — "
-                    "оформлю запрос, вы получите подтверждение в личном кабинете."
-                )
-            }
-
-        prompt_key = "reorder_suggestion" if intent == "reorder_suggestion" else "generate"
-        prompt = runtime.prompts.get(prompt_key) or runtime.prompts.get("generate")
-        if prompt is None:
-            return {"final_answer": _FALLBACK_ANSWER}
-
-        system = runtime.prompts.get("system")
-        rendered = render_prompt(
-            prompt.template,
-            history=_format_history(state),
-            context=_format_context(context),
-            intent=intent,
-            reorder=_format_context(context),
-        )
-        messages: list[BaseMessage] = []
-        if system is not None and system.template:
-            messages.append(SystemMessage(content=system.template))
-        messages.append(HumanMessage(content=rendered))
+        model = runtime.llm
+        messages: list[BaseMessage] = [SystemMessage(content=_system_prompt(runtime, intent))]
+        messages.extend(state.get("messages") or [])
 
         try:
-            resp = await runtime.llm.ainvoke(messages)
-            answer = str(resp.content or "").strip()
-        except Exception:  # noqa: BLE001
-            return {"final_answer": _FALLBACK_ANSWER}
-        return {"final_answer": answer or _FALLBACK_ANSWER}
+            if runtime.lc_tools:
+                resp = await model.bind_tools(runtime.lc_tools).ainvoke(messages)
+            else:
+                resp = await model.ainvoke(messages)
+        except Exception:  # noqa: BLE001 — degrade gracefully
+            context = await _deterministic_context(runtime, state, intent)
+            return {"context": context, "messages": [AIMessage(content=_fallback_answer(context))]}
 
-    return generate
+        return {"messages": [resp]}
+
+    return decide_action
+
+
+def make_finalize(runtime: AgentRuntime) -> Callable:
+    def finalize(state: AgentState) -> dict:
+        messages = state.get("messages") or []
+        last = messages[-1] if messages else None
+        content = str(getattr(last, "content", "") or "").strip()
+        return {"final_answer": content or _FALLBACK_ANSWER}
+
+    return finalize
