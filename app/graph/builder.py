@@ -60,7 +60,9 @@ def build_graph(
     builder.add_edge("classify_intent", "decide_action")
 
     if read_tools:
-        builder.add_node("call_tool", ToolNode(read_tools))
+        # Ошибка инструмента (например, 404 от ядра) не роняет граф, а
+        # возвращается LLM как сообщение об ошибке — агент отвечает корректно.
+        builder.add_node("call_tool", ToolNode(read_tools, handle_tool_errors=True))
         builder.add_conditional_edges(
             "decide_action",
             _route,

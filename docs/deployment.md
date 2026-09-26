@@ -24,7 +24,7 @@ Docker-сети.
 | `UWU_API_TIMEOUT_SECONDS` | `30.0` | таймаут запросов к ядру |
 | `LLM_BASE_URL` | `https://inference.waw0.amvera.ru/v1` | OpenAI-совместимый base URL |
 | `LLM_API_KEY` | — | ключ LLM |
-| `LLM_MODEL` | `gpt-4.1` | имя модели |
+| `LLM_MODEL` | `qwen3_30b` | имя модели (должна совпадать с пакетом токенов) |
 | `LLM_TEMPERATURE` | `0.3` | температура |
 | `LLM_MAX_TOKENS` | `1024` | лимит токенов |
 | `CHECKPOINT_DB_URL` | — | PostgreSQL для checkpointer (пусто = in-memory) |

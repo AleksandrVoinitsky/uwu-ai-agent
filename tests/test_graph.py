@@ -82,6 +82,36 @@ async def test_tool_calling_executes_tool():
     assert llm.bound_tools == [lc_tool]
 
 
+async def test_tool_error_does_not_crash_graph():
+    async def failing_search(query: str):
+        raise RuntimeError("ядро недоступно")
+
+    class _Args(BaseModel):
+        query: str = Field(description="поисковый запрос")
+
+    lc_tool = StructuredTool.from_function(
+        coroutine=failing_search,
+        name="search_catalog",
+        description="поиск",
+        args_schema=_Args,
+    )
+    llm = FakeToolCallingLLM(
+        [
+            AIMessage(content="consultation"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "search_catalog", "args": {"query": "ручка"}, "id": "call-1"}
+                ],
+            ),
+            AIMessage(content="Не удалось получить данные, попробуйте позже."),
+        ]
+    )
+    result = await _invoke(make_runtime(llm=llm, lc_tools=[lc_tool]), "найди ручку")
+    # Ошибка инструмента не роняет граф — агент отвечает корректно.
+    assert result["final_answer"] == "Не удалось получить данные, попробуйте позже."
+
+
 async def test_preserves_history():
     graph = build_graph(make_runtime())
     await graph.ainvoke(
