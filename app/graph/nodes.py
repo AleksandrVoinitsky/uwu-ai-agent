@@ -48,9 +48,15 @@ def _last_user_text(state: AgentState) -> str:
 
 
 def _heuristic_intent(text: str) -> str:
-    """Детерминированная классификация по ключевым словам (fallback без LLM)."""
+    """Детерминированная классификация по ключевым словам (fallback без LLM).
+
+    Порядок важен: «оформить/заказать» (создание) проверяется раньше «статуса
+    заказа», т.к. слово «заказ» встречается в обоих случаях.
+    """
     t = text.lower()
-    if any(k in t for k in ("статус", "заказ", "order", "status")):
+    if any(k in t for k in ("оформи", "закажи", "закажите", "купи", "купить", "create order")):
+        return "create_order"
+    if any(k in t for k in ("статус", "status", "отследить", "где мой заказ")):
         return "order_status"
     if any(k in t for k in ("наличие", "остат", "в наличии", "на складе", "stock")):
         return "stock"
@@ -60,8 +66,6 @@ def _heuristic_intent(text: str) -> str:
         return "add_to_cart"
     if any(k in t for k in ("повтори", "докупи", "список покупок", "reorder")):
         return "reorder_suggestion"
-    if any(k in t for k in ("оформи", "купи", "закажи", "create order")):
-        return "create_order"
     return "consultation"
 
 

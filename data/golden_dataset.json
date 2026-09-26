@@ -1,0 +1,9 @@
+[
+  {"message": "Есть ли в наличии ручка?", "intent": "stock"},
+  {"message": "Сколько стоит тетрадь?", "intent": "price"},
+  {"message": "Какой статус у моего заказа 123?", "intent": "order_status"},
+  {"message": "Добавь ручку в корзину", "intent": "add_to_cart"},
+  {"message": "Оформите заказ", "intent": "create_order"},
+  {"message": "Что посоветуете в подарок?", "intent": "consultation"},
+  {"message": "Повторите мой прошлый заказ", "intent": "reorder_suggestion"}
+]
