@@ -53,6 +53,7 @@ async def webhook(request: Request) -> dict:
         text=text,
         channel=channel,
         customer_id=customer_id,
+        client=request.app.state.client,
     )
     answer = result.get("final_answer") or ""
 

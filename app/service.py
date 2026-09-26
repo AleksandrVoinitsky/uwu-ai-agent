@@ -9,16 +9,24 @@
 """
 from __future__ import annotations
 
+import time
+from uuid import uuid4
+
 from langchain_core.messages import HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 
 from app.clients.uwu import UwuClient
 from app.config_loader.loader import load_agent_config
 from app.core.config import Settings
+from app.core.logging import get_logger
 from app.graph.runtime import AgentRuntime
 from app.llm.factory import build_chat_model
 from app.tools.langchain_tools import build_langchain_tools
 from app.tools.uwu_tools import build_tools
+
+logger = get_logger("app.service")
+
+_FALLBACK_ANSWER = "Извините, я сейчас не могу ответить. Оператор свяжется с вами."
 
 
 async def build_runtime(settings: Settings) -> tuple[AgentRuntime, UwuClient]:
@@ -53,19 +61,48 @@ async def process_message(
     text: str,
     channel: str = "site",
     customer_id: int | None = None,
+    client: UwuClient | None = None,
 ) -> dict:
     """Обрабатывает входящее сообщение графом и возвращает состояние.
 
     ``thread_id`` привязан к чату — checkpointer сохраняет историю диалога между
-    сообщениями одного чата.
+    сообщениями одного чата. При наличии ``client`` пишет результат запуска в
+    журнал ядра (``POST /api/agent/runs``, fire-and-forget — не роняет обработку).
     """
-    result = await graph.ainvoke(
-        {
-            "messages": [HumanMessage(content=text)],
-            "chat_id": chat_id,
-            "channel": channel,
-            "customer_id": customer_id,
-        },
-        config={"configurable": {"thread_id": f"chat-{chat_id}"}},
-    )
+    trace_id = uuid4().hex
+    started = time.monotonic()
+    try:
+        result = await graph.ainvoke(
+            {
+                "messages": [HumanMessage(content=text)],
+                "chat_id": chat_id,
+                "channel": channel,
+                "customer_id": customer_id,
+                "trace_id": trace_id,
+            },
+            config={"configurable": {"thread_id": f"chat-{chat_id}"}},
+        )
+        status = "ok"
+        error = None
+    except Exception as exc:
+        logger.exception("Ошибка обработки сообщения чата %s", chat_id)
+        result = {"intent": None, "context": {}, "final_answer": _FALLBACK_ANSWER}
+        status = "error"
+        error = str(exc)
+
+    if client is not None:
+        try:
+            await client.post_run(
+                trace_id=trace_id,
+                chat_id=chat_id,
+                customer_id=customer_id,
+                intent=result.get("intent"),
+                model=runtime.settings.llm_model,
+                status=status,
+                error=error,
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+        except Exception:
+            logger.warning("Не удалось записать запуск агента в ядро", exc_info=True)
+
     return result
