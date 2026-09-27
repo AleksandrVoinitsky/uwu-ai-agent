@@ -113,11 +113,15 @@ class UwuClient:
             },
         )
 
-    async def create_order(self, customer_phone: str, items: list) -> dict:
+    async def create_order(self, customer_phone: str, items: list, customer_name: str | None = None) -> dict:
         """Создать заказ (DRAFT) по телефону и списку позиций (без одобрения)."""
         return await self._post_json(
             "/api/agent/create_order",
-            {"customer_phone": customer_phone, "items": items},
+            {
+                "customer_phone": customer_phone,
+                "customer_name": customer_name,
+                "items": items,
+            },
         )
 
     async def match_customer(self, phone: str) -> dict:

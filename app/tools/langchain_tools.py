@@ -44,6 +44,7 @@ class AddToCartArgs(BaseModel):
 
 class CreateOrderArgs(BaseModel):
     customer_phone: str = Field(description="Номер телефона покупателя")
+    customer_name: str | None = Field(default=None, description="Имя покупателя (если известно)")
     items: list[dict] = Field(description="Позиции заказа: [{name или nomenklatura_id, quantity}]")
 
 
