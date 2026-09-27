@@ -44,8 +44,6 @@ class ToolSpec:
     method: str
     params_schema: dict = field(default_factory=dict)
     permission: str | None = None
-    approval_policy: str = "auto"
-    approval_threshold_amount: str | None = None
     rate_limit: int = 60
 
 
@@ -85,8 +83,6 @@ def _tools_from_raw(raw: list[dict]) -> dict[str, ToolSpec]:
             method=t.get("method", "GET"),
             params_schema=t.get("params_schema") or {},
             permission=t.get("permission"),
-            approval_policy=t.get("approval_policy", "auto"),
-            approval_threshold_amount=t.get("approval_threshold_amount"),
             rate_limit=t.get("rate_limit", 60),
         )
         out[spec.key] = spec

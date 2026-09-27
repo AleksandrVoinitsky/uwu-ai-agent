@@ -26,6 +26,7 @@ class _AddArgs(BaseModel):
 
 
 class _OrderArgs(BaseModel):
+    customer_phone: str = Field(description="номер телефона")
     items: list[dict] = Field(description="Позиции заказа")
 
 
@@ -79,7 +80,10 @@ async def test_create_order_executes_directly():
                 tool_calls=[
                     {
                         "name": "create_order",
-                        "args": {"items": [{"nomenklatura_id": 7, "quantity": 3}]},
+                        "args": {
+                            "customer_phone": "79991112233",
+                            "items": [{"name": "хлеб", "quantity": 3}],
+                        },
                         "id": "call-1",
                     }
                 ],
@@ -100,7 +104,7 @@ async def test_create_order_executes_directly():
     )
 
     assert result["final_answer"] == "Заказ оформлен."
-    assert client.orders == [(11, [{"nomenklatura_id": 7, "quantity": 3}])]
+    assert client.orders == [("79991112233", [{"name": "хлеб", "quantity": 3}])]
 
 
 async def test_write_without_customer_asks_for_profile():

@@ -21,7 +21,8 @@ from app.clients.uwu import UwuClient
 ToolFn = Callable[..., Awaitable[Any]]
 
 # Инструменты, привязанные к покупателю: ``customer_id`` подставляется из чата.
-CUSTOMER_SCOPED_TOOLS: frozenset[str] = frozenset({"get_cart", "add_to_cart", "create_order"})
+# ``create_order`` сюда не входит — он принимает номер телефона от модели.
+CUSTOMER_SCOPED_TOOLS: frozenset[str] = frozenset({"get_cart", "add_to_cart"})
 
 
 def build_tools(client: UwuClient) -> dict[str, ToolFn]:
@@ -37,4 +38,5 @@ def build_tools(client: UwuClient) -> dict[str, ToolFn]:
         "get_order_status": client.get_zakaz,
         "add_to_cart": client.add_to_cart,
         "create_order": client.create_order,
+        "match_customer": client.match_customer,
     }

@@ -113,12 +113,16 @@ class UwuClient:
             },
         )
 
-    async def create_order(self, customer_id: int, items: list) -> dict:
-        """Создать заказ (DRAFT) от имени покупателя (после одобрения)."""
+    async def create_order(self, customer_phone: str, items: list) -> dict:
+        """Создать заказ (DRAFT) по телефону и списку позиций (без одобрения)."""
         return await self._post_json(
             "/api/agent/create_order",
-            {"customer_id": customer_id, "items": items},
+            {"customer_phone": customer_phone, "items": items},
         )
+
+    async def match_customer(self, phone: str) -> dict:
+        """Найти покупателя/контрагента по номеру телефона (привязка заказа)."""
+        return await self._get_json("/api/agent/match_customer", params={"phone": phone})
 
     # --- Одобрения (human-in-the-loop) ---
 

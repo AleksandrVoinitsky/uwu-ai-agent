@@ -44,15 +44,20 @@ class MockUwuClient:
     def __init__(self):
         self.added: list[tuple] = []
         self.orders: list[tuple] = []
+        self.matches: list[str] = []
         self.runs: list[dict] = []
 
     async def add_to_cart(self, customer_id, nomenklatura_id, quantity):
         self.added.append((customer_id, nomenklatura_id, quantity))
         return {"ok": True}
 
-    async def create_order(self, customer_id, items):
-        self.orders.append((customer_id, items))
+    async def create_order(self, customer_phone, items):
+        self.orders.append((customer_phone, items))
         return {"ok": True}
+
+    async def match_customer(self, phone):
+        self.matches.append(phone)
+        return {"found": True, "customer_id": 1, "name": "Иван", "phone": phone}
 
     async def post_run(self, **payload):
         self.runs.append(payload)

@@ -43,7 +43,12 @@ class AddToCartArgs(BaseModel):
 
 
 class CreateOrderArgs(BaseModel):
-    items: list[dict] = Field(description="Позиции заказа: [{nomenklatura_id, quantity}]")
+    customer_phone: str = Field(description="Номер телефона покупателя")
+    items: list[dict] = Field(description="Позиции заказа: [{name или nomenklatura_id, quantity}]")
+
+
+class MatchCustomerArgs(BaseModel):
+    phone: str = Field(description="Номер телефона покупателя для поиска аккаунта")
 
 
 def _make_tool(name: str, description: str, args_schema: type[BaseModel]) -> BaseTool:
@@ -95,6 +100,10 @@ def build_langchain_tools(
     if "create_order" in tool_specs:
         tools.append(
             _make_tool("create_order", tool_specs["create_order"].description, CreateOrderArgs)
+        )
+    if "match_customer" in tool_specs:
+        tools.append(
+            _make_tool("match_customer", tool_specs["match_customer"].description, MatchCustomerArgs)
         )
 
     return tools
