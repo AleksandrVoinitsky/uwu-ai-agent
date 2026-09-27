@@ -39,16 +39,16 @@
     "description": null,
     "active_version": 1,
     "template": "Ты — ассистент магазина …",
-    "variables": [],
-    "model": null,
-    "temperature": null,
-    "max_tokens": null
+    "variables": []
   }
 ]
 ```
 
 - `template` — текст **активной версии** (`agent_prompt_versions`), `variables` —
-  список плейсхолдеров, `model`/`temperature`/`max_tokens` — переопределения.
+  список плейсхолдеров.
+- Модель и параметры сэмплирования (`model`/`temperature`/`max_tokens`) в промптах
+  **не хранятся** — они задаются переменными окружения сервиса агента
+  (``LLM_MODEL``, ``LLM_TEMPERATURE``, ``LLM_MAX_TOKENS``), а не в админке ядра.
 - Агент кэширует результат и использует эти промпты (не имеет «зашитых»
   бизнес-промптов, кроме жёсткой защитной рамки).
 
@@ -172,7 +172,8 @@ cookie-авторизация), **не** агент своим API-ключом 
 
 - `Message.author` — `String(20)`, default `"operator"` (`operator|agent|customer`).
 - `Message.agent_run_id` — `FK(agent_runs.id)`, nullable.
-- `Chat.agent_enabled` — `Boolean`, default `false` (включать агента по чату/каналу).
+- `Chat.agent_enabled` — `Boolean`, default `true` (автоответ включён по умолчанию;
+  оператор выключает тумблер, чтобы отвечать вручную).
 
 ## 4. Дефолтные промпты и инструменты (сид)
 

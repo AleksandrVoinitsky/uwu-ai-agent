@@ -22,9 +22,6 @@ DEFAULT_PROMPTS: dict[str, dict] = {
             "- Отвечай на языке пользователя."
         ),
         "variables": [],
-        "model": None,
-        "temperature": None,
-        "max_tokens": None,
     },
     "classify_intent": {
         "name": "Классификация намерения",
@@ -38,9 +35,6 @@ DEFAULT_PROMPTS: dict[str, dict] = {
             "Сообщение: {messages}"
         ),
         "variables": ["messages"],
-        "model": None,
-        "temperature": 0.0,
-        "max_tokens": 16,
     },
     "generate": {
         "name": "Генерация ответа",
@@ -52,9 +46,6 @@ DEFAULT_PROMPTS: dict[str, dict] = {
             "Ответ должен быть дружелюбным, конкретным и без выдуманных данных."
         ),
         "variables": ["history", "context", "intent"],
-        "model": None,
-        "temperature": None,
-        "max_tokens": None,
     },
     "reorder_suggestion": {
         "name": "Персональный список покупок",
@@ -66,9 +57,6 @@ DEFAULT_PROMPTS: dict[str, dict] = {
             "Предложи 3–5 позиций с кратким обоснованием. Не выдумывай цены и наличие."
         ),
         "variables": ["history", "reorder"],
-        "model": None,
-        "temperature": None,
-        "max_tokens": None,
     },
 }
 

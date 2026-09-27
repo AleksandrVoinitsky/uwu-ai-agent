@@ -44,10 +44,6 @@ class Settings(BaseSettings):
     checkpoint_db_url: str | None = None
     checkpoint_schema: str = "agent"
 
-    # --- Поведение агента (переопределяет настройки админки ядра) ---
-    default_responder: str = "agent"
-    max_history: int = 20
-
     @property
     def is_production(self) -> bool:
         """True, если окружение — production (для fail-fast проверок)."""

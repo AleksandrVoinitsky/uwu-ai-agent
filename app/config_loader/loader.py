@@ -21,15 +21,16 @@ logger = get_logger("app.config_loader")
 
 @dataclass
 class PromptSpec:
-    """Промпт (активная версия) с параметрами сэмплирования."""
+    """Промпт (активная версия) с плейсхолдерами.
+
+    Параметры сэмплирования LLM (model/temperature/max_tokens) задаются только
+    переменными окружения сервиса (``Settings``), а не на уровне промпта.
+    """
 
     key: str
     name: str
     template: str
     variables: list[str] = field(default_factory=list)
-    model: str | None = None
-    temperature: float | None = None
-    max_tokens: int | None = None
 
 
 @dataclass
@@ -50,13 +51,14 @@ class ToolSpec:
 
 @dataclass
 class AgentConfig:
-    """Итоговая конфигурация агента: промпты, инструменты, параметры LLM."""
+    """Итоговая конфигурация агента: промпты и инструменты.
+
+    Параметры LLM (модель/temperature/max_tokens) в этот объект не входят — они
+    читаются из ``Settings`` в :func:`app.llm.factory.build_chat_model`.
+    """
 
     prompts: dict[str, PromptSpec]
     tools: dict[str, ToolSpec]
-    model: str
-    temperature: float
-    max_tokens: int
 
 
 def _prompts_from_raw(raw: list[dict]) -> dict[str, PromptSpec]:
@@ -67,9 +69,6 @@ def _prompts_from_raw(raw: list[dict]) -> dict[str, PromptSpec]:
             name=p.get("name", p["key"]),
             template=p.get("template", ""),
             variables=p.get("variables") or [],
-            model=p.get("model"),
-            temperature=p.get("temperature"),
-            max_tokens=p.get("max_tokens"),
         )
         out[spec.key] = spec
     return out
@@ -95,16 +94,14 @@ def _tools_from_raw(raw: list[dict]) -> dict[str, ToolSpec]:
 
 
 def default_config(settings: Settings) -> AgentConfig:
-    """Конфигурация из локальных дефолтов (без обращения к ядру)."""
+    """Конфигурация из локальных дефолтов (без обращения к ядру).
+
+    ``settings`` оставлен в сигнатуре для совместимости: параметры LLM в
+    конфигурацию промптов/инструментов не входят.
+    """
     prompts = _prompts_from_raw([{"key": k, **v} for k, v in DEFAULT_PROMPTS.items()])
     tools = _tools_from_raw([{"key": k, **v} for k, v in DEFAULT_TOOLS.items()])
-    return AgentConfig(
-        prompts=prompts,
-        tools=tools,
-        model=settings.llm_model,
-        temperature=settings.llm_temperature,
-        max_tokens=settings.llm_max_tokens,
-    )
+    return AgentConfig(prompts=prompts, tools=tools)
 
 
 async def load_agent_config(client: UwuClient, settings: Settings) -> AgentConfig:
