@@ -14,7 +14,7 @@ from app.graph.runtime import AgentRuntime
 from app.main import create_app
 
 
-def make_runtime(llm=None, tools=None, lc_tools=None, write_tool_names=None, client=None) -> AgentRuntime:
+def make_runtime(llm=None, tools=None, lc_tools=None, client=None) -> AgentRuntime:
     """Собирает рантайм на дефолтной конфигурации с подменяемыми LLM/инструментами."""
     settings = Settings(_env_file=None)
     config = default_config(settings)
@@ -23,7 +23,6 @@ def make_runtime(llm=None, tools=None, lc_tools=None, write_tool_names=None, cli
         prompts=config.prompts,
         tools=tools or {},
         lc_tools=lc_tools or [],
-        write_tool_names=write_tool_names or frozenset(),
         client=client,
         settings=settings,
     )

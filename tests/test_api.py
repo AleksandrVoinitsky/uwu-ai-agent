@@ -39,5 +39,5 @@ async def test_run_endpoint():
     assert resp.status_code == 200
     data = resp.json()
     assert data["intent"] == "add_to_cart"
-    assert data["context"]["requires_approval"] is True
+    assert data["context"]["need_clarify"] is True
     assert data["answer"]

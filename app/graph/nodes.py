@@ -1,4 +1,4 @@
-"""Узлы графа LangGraph (фаза 3 — tool-calling).
+"""Узлы графа LangGraph (консультация + сбор заказов без одобрения).
 
 Узлы — фабрики, замыкающие :class:`~app.graph.runtime.AgentRuntime`. Маршрут:
 
@@ -6,10 +6,14 @@
 START → classify_intent → decide_action ⇄ call_tool → finalize → END
 ```
 
-``decide_action`` — LLM с привязанными read-инструментами: либо отвечает, либо
-возвращает tool_calls; ``call_tool`` (``ToolNode``) исполняет их, результат
-возвращается в ``decide_action``. Без LLM ``decide_action`` деградирует к
-детерминированному ответу (поиск по каталогу/список товаров).
+``decide_action`` — LLM с привязанными инструментами: либо отвечает, либо
+возвращает tool_calls; ``call_tool`` исполняет их (с подстановкой ``customer_id``
+из состояния чата для инструментов покупателя) и возвращает результат в
+``decide_action``. Без LLM ``decide_action`` деградирует к детерминированному
+ответу (поиск по каталогу/список товаров).
+
+Одобрение оператора (HITL) убрано: агент собирает заказы и корзину сам, но
+документ создаётся в статусе ``DRAFT`` (проведение — за оператором).
 """
 from __future__ import annotations
 
@@ -17,11 +21,11 @@ import json
 import re
 from collections.abc import Callable
 
-from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
-from langgraph.types import interrupt
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage
 
 from app.graph.runtime import AgentRuntime, render_prompt
 from app.graph.state import AgentState
+from app.tools.uwu_tools import CUSTOMER_SCOPED_TOOLS
 
 INTENTS = (
     "consultation",
@@ -35,6 +39,11 @@ INTENTS = (
 )
 
 _FALLBACK_ANSWER = "Извините, я сейчас не могу ответить. Оператор свяжется с вами."
+
+_NO_CUSTOMER = (
+    "Чтобы собрать корзину или оформить заказ, мне нужен ваш профиль покупателя. "
+    "Уточните, пожалуйста, номер телефона или зайдите в личный кабинет магазина."
+)
 
 
 # --- Вспомогательные -----------------------------------------------------------
@@ -74,25 +83,6 @@ def _extract_order_id(text: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def _format_context(context: dict) -> str:
-    parts: list[str] = []
-    products = context.get("products")
-    if products:
-        parts.append(
-            "Товары: "
-            + "; ".join(
-                f"{p.get('name')} (цена {p.get('price')}, остаток {p.get('stock')})"
-                for p in products[:10]
-            )
-        )
-    order = context.get("order")
-    if order:
-        parts.append(f"Заказ: {order}")
-    if context.get("requires_approval"):
-        parts.append("Требуется одобрение оператора.")
-    return "\n".join(parts) if parts else "(нет данных)"
-
-
 def _fallback_answer(context: dict) -> str:
     """Детерминированный ответ без LLM (перечисляет найденные товары)."""
     products = context.get("products")
@@ -102,8 +92,8 @@ def _fallback_answer(context: dict) -> str:
             for p in products[:5]
         ]
         return "Нашёл для вас:\n" + "\n".join(lines)
-    if context.get("requires_approval"):
-        return "Это действие требует подтверждения оператора."
+    if context.get("need_clarify"):
+        return "Уточните, пожалуйста, какие товары и в каком количестве добавить в заказ."
     return _FALLBACK_ANSWER
 
 
@@ -131,7 +121,7 @@ async def _deterministic_context(runtime: AgentRuntime, state: AgentState, inten
             else None
         )
     elif intent in ("add_to_cart", "create_order"):
-        context["requires_approval"] = True
+        context["need_clarify"] = True
     return context
 
 
@@ -161,15 +151,22 @@ def _system_prompt(runtime: AgentRuntime, intent: str) -> str:
 def make_classify_intent(runtime: AgentRuntime) -> Callable:
     async def classify_intent(state: AgentState) -> dict:
         text = _last_user_text(state)
+        # Чёткие намерения («добавь … в корзину», «оформи заказ», «остатки»,
+        # «цена») классифицируем детерминированно — это надёжнее, чем LLM, и не
+        # тратит токены. LLM используется только для неоднозначных сообщений.
+        heuristic = _heuristic_intent(text)
+        if heuristic != "consultation":
+            return {"intent": heuristic}
+
         prompt = runtime.prompts.get("classify_intent")
         if runtime.llm is None or prompt is None:
-            return {"intent": _heuristic_intent(text)}
+            return {"intent": heuristic}
         rendered = render_prompt(prompt.template, messages=text)
         try:
             resp = await runtime.llm.ainvoke([BaseMessage(content=rendered, type="human")])
             raw = str(getattr(resp, "content", "") or "").strip().lower()
         except Exception:  # noqa: BLE001
-            return {"intent": _heuristic_intent(text)}
+            return {"intent": heuristic}
         for intent in INTENTS:
             if intent in raw:
                 return {"intent": intent}
@@ -205,6 +202,47 @@ def make_decide_action(runtime: AgentRuntime) -> Callable:
     return decide_action
 
 
+def make_call_tool(runtime: AgentRuntime) -> Callable:
+    """Исполняет вызовы инструментов из последнего сообщения LLM.
+
+    Для инструментов, привязанных к покупателю (``get_cart``/``add_to_cart``/
+    ``create_order``), подставляет ``customer_id`` из состояния чата — модель не
+    должна его придумывать. Результат возвращается как ``ToolMessage``, чтобы
+    ``decide_action`` сгенерировал финальный ответ.
+    """
+
+    async def call_tool(state: AgentState) -> dict:
+        messages = state.get("messages") or []
+        last = messages[-1] if messages else None
+        tool_calls = getattr(last, "tool_calls", None) or []
+        customer_id = state.get("customer_id")
+
+        results: list[ToolMessage] = []
+        for tc in tool_calls:
+            name = tc.get("name")
+            call_id = tc.get("id")
+            args = dict(tc.get("args") or {})
+            fn = runtime.tools.get(name)
+            if fn is None:
+                results.append(ToolMessage(content="инструмент не найден", tool_call_id=call_id, name=name))
+                continue
+            if name in CUSTOMER_SCOPED_TOOLS:
+                if customer_id is None:
+                    results.append(ToolMessage(content=_NO_CUSTOMER, tool_call_id=call_id, name=name))
+                    continue
+                args["customer_id"] = customer_id
+            try:
+                out = await fn(**args)
+                content = json.dumps(out, ensure_ascii=False, default=str)
+            except Exception as exc:  # noqa: BLE001 — ошибка инструмента не валит граф
+                content = f"ошибка: {exc}"
+            results.append(ToolMessage(content=content, tool_call_id=call_id, name=name))
+
+        return {"messages": results}
+
+    return call_tool
+
+
 def make_finalize(runtime: AgentRuntime) -> Callable:
     def finalize(state: AgentState) -> dict:
         messages = state.get("messages") or []
@@ -213,67 +251,3 @@ def make_finalize(runtime: AgentRuntime) -> Callable:
         return {"final_answer": content or _FALLBACK_ANSWER}
 
     return finalize
-
-
-async def _execute_write(runtime: AgentRuntime, tool_key: str, payload: dict) -> dict:
-    """Выполняет write-инструмент после одобрения (через REST API ядра)."""
-    if runtime.client is None:
-        return {"error": "клиент ядра недоступен"}
-    try:
-        if tool_key == "add_to_cart":
-            return await runtime.client.add_to_cart(
-                int(payload["customer_id"]),
-                int(payload["nomenklatura_id"]),
-                float(payload["quantity"]),
-            )
-        if tool_key == "create_order":
-            return await runtime.client.create_order(
-                int(payload["customer_id"]), payload["items"]
-            )
-    except Exception as exc:  # noqa: BLE001
-        return {"error": str(exc)}
-    return {"error": f"неизвестный инструмент: {tool_key}"}
-
-
-def make_request_approval(runtime: AgentRuntime) -> Callable:
-    """Узел HITL: создаёт ``AgentApproval`` и прерывает граф до решения оператора.
-
-    Возвращает из ``interrupt()`` значение-запрос (approval_id/tool_key/payload);
-    при возобновлении ``interrupt()`` вернёт решение ``{"approved": bool}`` —
-    тогда узел выполняет write (одобрено) или возвращает объяснение отказа.
-    """
-
-    async def request_approval(state: AgentState) -> dict:
-        messages = state.get("messages") or []
-        last = messages[-1]
-        tool_calls = getattr(last, "tool_calls", None) or []
-        tool_call = tool_calls[0]
-        tool_key = tool_call["name"]
-        payload = tool_call.get("args") or {}
-
-        approval_id = None
-        if runtime.client is not None:
-            try:
-                resp = await runtime.client.create_approval(
-                    tool_key=tool_key,
-                    payload=payload,
-                    chat_id=state.get("chat_id"),
-                    customer_id=state.get("customer_id"),
-                )
-                approval_id = resp.get("id")
-            except Exception:  # noqa: BLE001
-                approval_id = None
-
-        decision = interrupt(
-            {"approval_id": approval_id, "tool_key": tool_key, "payload": payload}
-        )
-        approved = decision.get("approved") if isinstance(decision, dict) else bool(decision)
-
-        if approved:
-            result = await _execute_write(runtime, tool_key, payload)
-            content = "[система] Действие выполнено: " + json.dumps(result, ensure_ascii=False)
-        else:
-            content = "[система] Действие отклонено оператором."
-        return {"messages": [AIMessage(content=content)]}
-
-    return request_approval

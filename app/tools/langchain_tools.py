@@ -4,6 +4,12 @@
 схемой аргументов, чтобы LLM мог выбирать инструмент и передавать аргументы.
 Имена/описания берутся из реестра инструментов ядра (``agent_tools``).
 
+Исполнение инструментов выполняет узел ``call_tool`` графа (см.
+:mod:`app.graph.nodes`) через ``runtime.tools`` — LangChain-обёртки здесь задают
+только **схему** для LLM. Для инструментов, привязанных к покупателю
+(``get_cart``/``add_to_cart``/``create_order``), ``customer_id`` не входит в
+схему: он подставляется из состояния чата, а не запрашивается у модели.
+
 См. также: :mod:`app.tools.uwu_tools`, docs/CORE_CONTRACT.md.
 """
 from __future__ import annotations
@@ -24,7 +30,7 @@ class GetStockArgs(BaseModel):
 
 
 class GetCartArgs(BaseModel):
-    customer_id: int = Field(description="ID покупателя")
+    """Корзина покупателя — без аргументов (покупатель берётся из чата)."""
 
 
 class GetZakazArgs(BaseModel):
@@ -32,94 +38,63 @@ class GetZakazArgs(BaseModel):
 
 
 class AddToCartArgs(BaseModel):
-    customer_id: int = Field(description="ID покупателя")
     nomenklatura_id: int = Field(description="ID товара (номенклатуры)")
     quantity: float = Field(description="Количество")
 
 
 class CreateOrderArgs(BaseModel):
-    customer_id: int = Field(description="ID покупателя")
     items: list[dict] = Field(description="Позиции заказа: [{nomenklatura_id, quantity}]")
+
+
+def _make_tool(name: str, description: str, args_schema: type[BaseModel]) -> BaseTool:
+    """Создаёт StructuredTool только со схемой (исполнение — через runtime.tools)."""
+    return StructuredTool.from_function(
+        coroutine=_noop,
+        name=name,
+        description=description,
+        args_schema=args_schema,
+    )
+
+
+async def _noop(**kwargs: object) -> dict:
+    """Заглушка: реальное исполнение выполняет узел ``call_tool`` графа."""
+    return dict(kwargs)
 
 
 def build_langchain_tools(
     client: UwuClient, tool_specs: dict[str, ToolSpec]
 ) -> list[BaseTool]:
-    """Собирает LangChain-инструменты чтения из реестра инструментов ядра.
+    """Собирает LangChain-инструменты (схемы для LLM) из реестра ядра.
 
     Инструмент создаётся только если он включён в реестре (ключ присутствует в
-    ``tool_specs``). Ключи совпадают с ``agent_tools.key`` ядра.
+    ``tool_specs``). Ключи совпадают с ``agent_tools.key`` ядра. Возвращает
+    read- и write-инструменты единым списком (одобрение оператора убрано).
     """
     tools: list[BaseTool] = []
 
     if "search_catalog" in tool_specs:
         tools.append(
-            StructuredTool.from_function(
-                coroutine=client.search_catalog,
-                name="search_catalog",
-                description=tool_specs["search_catalog"].description,
-                args_schema=SearchCatalogArgs,
-            )
+            _make_tool("search_catalog", tool_specs["search_catalog"].description, SearchCatalogArgs)
         )
     if "get_stock" in tool_specs:
         tools.append(
-            StructuredTool.from_function(
-                coroutine=client.get_stock,
-                name="get_stock",
-                description=tool_specs["get_stock"].description,
-                args_schema=GetStockArgs,
-            )
+            _make_tool("get_stock", tool_specs["get_stock"].description, GetStockArgs)
         )
     if "get_cart" in tool_specs:
         tools.append(
-            StructuredTool.from_function(
-                coroutine=client.get_cart,
-                name="get_cart",
-                description=tool_specs["get_cart"].description,
-                args_schema=GetCartArgs,
-            )
+            _make_tool("get_cart", tool_specs["get_cart"].description, GetCartArgs)
         )
     if "get_order_status" in tool_specs:
         tools.append(
-            StructuredTool.from_function(
-                coroutine=client.get_zakaz,
-                name="get_order_status",
-                description=tool_specs["get_order_status"].description,
-                args_schema=GetZakazArgs,
-            )
+            _make_tool("get_order_status", tool_specs["get_order_status"].description, GetZakazArgs)
         )
-
-    return tools
-
-
-def build_write_tools(
-    client: UwuClient, tool_specs: dict[str, ToolSpec]
-) -> list[BaseTool]:
-    """Write-инструменты (add_to_cart/create_order) — требуют одобрения оператора.
-
-    Эти инструменты регистрируются в LLM (чтобы он мог их предложить), но НЕ
-    выполняются напрямую: граф маршрутизирует их вызов в узел ``request_approval``
-    (создание ``AgentApproval`` + interrupt). Исполнение происходит после одобрения.
-    """
-    tools: list[BaseTool] = []
-
     if "add_to_cart" in tool_specs:
         tools.append(
-            StructuredTool.from_function(
-                coroutine=client.add_to_cart,
-                name="add_to_cart",
-                description=tool_specs["add_to_cart"].description,
-                args_schema=AddToCartArgs,
-            )
+            _make_tool("add_to_cart", tool_specs["add_to_cart"].description, AddToCartArgs)
         )
     if "create_order" in tool_specs:
         tools.append(
-            StructuredTool.from_function(
-                coroutine=client.create_order,
-                name="create_order",
-                description=tool_specs["create_order"].description,
-                args_schema=CreateOrderArgs,
-            )
+            _make_tool("create_order", tool_specs["create_order"].description, CreateOrderArgs)
         )
 
     return tools

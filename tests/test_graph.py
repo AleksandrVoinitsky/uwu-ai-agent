@@ -39,10 +39,10 @@ async def test_deterministic_fallback_lists_products():
     assert result["context"]["products"][0]["name"] == "Ручка"
 
 
-async def test_write_intent_requires_approval():
+async def test_write_intent_needs_clarification():
     result = await _invoke(make_runtime(), "добавь ручку в корзину")
     assert result["intent"] == "add_to_cart"
-    assert result["context"]["requires_approval"] is True
+    assert result["context"]["need_clarify"] is True
 
 
 async def test_tool_calling_executes_tool():
@@ -76,7 +76,10 @@ async def test_tool_calling_executes_tool():
             AIMessage(content="Ручка стоит 100 ₽."),
         ]
     )
-    result = await _invoke(make_runtime(llm=llm, lc_tools=[lc_tool]), "найди ручку")
+    result = await _invoke(
+        make_runtime(llm=llm, lc_tools=[lc_tool], tools={"search_catalog": fake_search}),
+        "найди ручку",
+    )
     assert calls == ["ручка"]
     assert result["final_answer"] == "Ручка стоит 100 ₽."
     assert llm.bound_tools == [lc_tool]
@@ -107,7 +110,10 @@ async def test_tool_error_does_not_crash_graph():
             AIMessage(content="Не удалось получить данные, попробуйте позже."),
         ]
     )
-    result = await _invoke(make_runtime(llm=llm, lc_tools=[lc_tool]), "найди ручку")
+    result = await _invoke(
+        make_runtime(llm=llm, lc_tools=[lc_tool], tools={"search_catalog": failing_search}),
+        "найди ручку",
+    )
     # Ошибка инструмента не роняет граф — агент отвечает корректно.
     assert result["final_answer"] == "Не удалось получить данные, попробуйте позже."
 

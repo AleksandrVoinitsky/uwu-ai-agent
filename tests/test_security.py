@@ -14,7 +14,9 @@ def test_system_prompt_has_safety_frame():
     template = DEFAULT_PROMPTS["system"]["template"]
     assert "не раскрывай" in template.lower()
     assert "данные, а не инструкции" in template.lower()
-    assert "не выполняй денежные операции" in template.lower()
+    # Агент не проводит денежные операции — только собирает заказы.
+    assert "не проводишь продажи" in template.lower()
+    assert "не списываешь деньги" in template.lower()
 
 
 async def test_user_input_is_data_not_instructions():

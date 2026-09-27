@@ -14,7 +14,7 @@ async def _collect(text: str) -> str:
 
 async def test_stream_yields_final_answer():
     answer = await _collect("добавь ручку в корзину")
-    assert "подтверждения оператора" in answer
+    assert "Уточните" in answer
 
 
 async def test_stream_lists_products():

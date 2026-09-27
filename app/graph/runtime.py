@@ -28,11 +28,9 @@ class AgentRuntime:
     prompts: dict[str, PromptSpec]
     tools: dict[str, ToolFn]
     settings: Settings
-    # LangChain-инструменты для tool-calling (регистрируются в LLM).
+    # LangChain-инструменты для tool-calling (схемы для LLM).
     lc_tools: list[BaseTool] = field(default_factory=list)
-    # Имена инструментов, требующих одобрения (add_to_cart, create_order).
-    write_tool_names: frozenset[str] = field(default_factory=frozenset)
-    # Клиент ядра — для создания одобрений и выполнения write-инструментов.
+    # Клиент ядра — для выполнения инструментов и записи аудита.
     client: UwuClient | None = None
 
 

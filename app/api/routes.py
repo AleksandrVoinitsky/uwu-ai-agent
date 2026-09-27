@@ -2,8 +2,8 @@
 
 - ``/healthz`` — для HEALTHCHECK контейнера.
 - ``/webhook`` — приём входящего сообщения, запуск графа, публикация ответа.
-- ``/resume`` — возобновление прерванного графа после решения по одобрению (HITL).
 - ``/run`` — отладочный запуск графа (без публикации в ядро).
+- ``/stream`` — потоковый ответ (SSE).
 
 Рантайм и граф живут в ``request.app.state`` (собираются в lifespan, см.
 :mod:`app.main`), поэтому их можно подменить в тестах.
@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from app import __version__
 from app.core.logging import get_logger
-from app.service import process_message, resume_graph, stream_message
+from app.service import process_message, stream_message
 
 router = APIRouter()
 logger = get_logger("app.api")
@@ -68,20 +68,6 @@ async def webhook(request: Request) -> dict:
         client=request.app.state.client,
     )
 
-    if result.get("status") == "approval_pending":
-        intr = result.get("interrupt") or {}
-        await _post_answer(
-            request,
-            int(chat_id),
-            "Запрос отправлен оператору на подтверждение — сообщу о результате.",
-        )
-        return {
-            "status": "approval_pending",
-            "chat_id": chat_id,
-            "approval_id": intr.get("approval_id"),
-            "tool_key": intr.get("tool_key"),
-        }
-
     answer = result.get("final_answer") or ""
     await _post_answer(request, int(chat_id), answer)
     return {
@@ -90,24 +76,6 @@ async def webhook(request: Request) -> dict:
         "intent": result.get("intent"),
         "answer": answer,
     }
-
-
-class ResumeRequest(BaseModel):
-    chat_id: int
-    approved: bool
-
-
-@router.post("/resume")
-async def resume(payload: ResumeRequest, request: Request) -> dict:
-    """Возобновляет прерванный граф после решения оператора по одобрению."""
-    result = await resume_graph(
-        request.app.state.graph,
-        chat_id=payload.chat_id,
-        approved=payload.approved,
-    )
-    answer = result.get("final_answer") or ""
-    await _post_answer(request, payload.chat_id, answer)
-    return {"status": "ok", "chat_id": payload.chat_id, "answer": answer}
 
 
 class RunRequest(BaseModel):
@@ -126,12 +94,6 @@ async def run_debug(payload: RunRequest, request: Request) -> dict:
         text=payload.message,
         channel=payload.channel,
     )
-    if result.get("status") == "approval_pending":
-        return {
-            "status": "approval_pending",
-            "approval_id": (result.get("interrupt") or {}).get("approval_id"),
-            "tool_key": (result.get("interrupt") or {}).get("tool_key"),
-        }
     return {
         "intent": result.get("intent"),
         "context": result.get("context"),

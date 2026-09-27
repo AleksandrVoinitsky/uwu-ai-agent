@@ -4,8 +4,11 @@
 инструмент не выполняет бизнес-логику сам, а вызывает REST API ядра через
 :class:`app.clients.uwu.UwuClient`. Права проверяет ядро по API-ключу.
 
-Сейчас реализованы read-инструменты (политика ``auto``); write-инструменты
-(``add_to_cart``/``create_order``) подключаются на фазе HITL (5).
+Все инструменты выполняются **без одобрения оператора**: агент собирает заказы и
+консультирует по наличию, но не проводит продажи (документ создаётся в статусе
+``DRAFT``, проведение остаётся за оператором). Для инструментов, привязанных к
+покупателю (``get_cart``/``add_to_cart``/``create_order``), ``customer_id``
+подставляется узлом ``call_tool`` из состояния чата, а не запрашивается у LLM.
 """
 from __future__ import annotations
 
@@ -16,6 +19,9 @@ from app.clients.uwu import UwuClient
 
 # Асинхронная функция-инструмент: вызывает эндпоинт ядра и возвращает JSON.
 ToolFn = Callable[..., Awaitable[Any]]
+
+# Инструменты, привязанные к покупателю: ``customer_id`` подставляется из чата.
+CUSTOMER_SCOPED_TOOLS: frozenset[str] = frozenset({"get_cart", "add_to_cart", "create_order"})
 
 
 def build_tools(client: UwuClient) -> dict[str, ToolFn]:
@@ -29,4 +35,6 @@ def build_tools(client: UwuClient) -> dict[str, ToolFn]:
         "get_stock": client.get_stock,
         "get_cart": client.get_cart,
         "get_order_status": client.get_zakaz,
+        "add_to_cart": client.add_to_cart,
+        "create_order": client.create_order,
     }
